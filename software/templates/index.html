@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AquaSense | Foreign Contaminant Detection</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+ --bg:#071525;--sidebar:#061321;--panel:#0d2034;--panel2:#10283e;--border:#1c3852;
+ --text:#f1f7ff;--muted:#a9bfd7;--blue:#35b7ff;--teal:#27dfb0;--amber:#ffbd4a;--red:#ff6575;
+}
+body.light{
+ --bg:#eef4f9;--sidebar:#fff;--panel:#fff;--panel2:#f5f9fd;--border:#d4e0eb;
+ --text:#172b40;--muted:#5d7288;--blue:#087ec0;--teal:#078a70;--amber:#a76a00;--red:#c83349;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top left,color-mix(in srgb,var(--panel2) 80%,var(--bg)),var(--bg) 62%);color:var(--text);font-family:Inter,Arial,sans-serif;transition:background .2s,color .2s}
+.app{display:grid;grid-template-columns:245px minmax(0,1fr);min-height:100vh}
+.sidebar{background:var(--sidebar);border-right:1px solid var(--border);padding:26px 16px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:11px;padding:0 8px 28px;border-bottom:1px solid var(--border)}
+.logo{font-size:34px;color:var(--blue)}
+.brand h2{font-size:22px;margin:0 0 4px}.brand p{font-size:11px;line-height:1.4;color:var(--muted);margin:0}
+nav{display:grid;gap:8px;margin-top:26px}
+nav button{width:100%;text-align:left;color:var(--muted);text-decoration:none;padding:13px 12px;border-radius:10px;font-size:14px;border:0;background:transparent;font-weight:500}
+nav button.active{background:color-mix(in srgb,var(--blue) 22%,var(--panel));color:var(--text);border-left:3px solid var(--blue)}
+nav button span{display:inline-block;width:27px;color:var(--blue)}
+.sidebar-bottom{margin-top:auto;padding:15px 12px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.online-dot{display:inline-block;width:9px;height:9px;background:var(--teal);border-radius:50%;margin-right:8px}
+.sidebar-bottom strong{font-size:13px;color:var(--teal)}.sidebar-bottom p{font-size:12px;color:var(--muted);margin-bottom:0}
+main{padding:28px;min-width:0}.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+h1{font-size:29px;margin:0 0 7px;letter-spacing:-.5px}.subtitle{margin:0;color:var(--muted);font-size:14px}
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pill{border:1px solid var(--border);border-radius:22px;padding:10px 13px;font-size:12px;color:var(--muted);background:var(--panel)}
+.pill.sim{color:var(--blue)}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:18px}
+.card{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:15px;padding:19px;min-width:0;box-shadow:0 10px 30px #0000000b}
+.metric-top{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.icon{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in srgb,var(--blue) 17%,var(--panel));color:var(--blue);font-size:22px}
+.metric-number{font-size:31px;font-weight:750;letter-spacing:-.8px;margin:15px 0 9px}.metric-number small{font-size:14px;font-weight:500;color:var(--muted);letter-spacing:0}
+.chip{display:inline-block;padding:6px 10px;border-radius:18px;font-size:11px;font-weight:700;color:var(--teal);background:color-mix(in srgb,var(--teal) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--teal) 40%,var(--border))}
+.chip.warn{color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,var(--panel));border-color:var(--amber)}
+.chip.danger{color:var(--red);background:color-mix(in srgb,var(--red) 12%,var(--panel));border-color:var(--red)}
+.contam-card{border-color:color-mix(in srgb,var(--teal) 50%,var(--border))}
+.contam-status{display:flex;align-items:center;gap:12px;margin-top:16px;padding:13px;border:1px solid color-mix(in srgb,var(--teal) 50%,var(--border));background:color-mix(in srgb,var(--teal) 12%,var(--panel));border-radius:11px}
+.check{width:35px;height:35px;flex-shrink:0;border-radius:50%;display:grid;place-items:center;background:var(--teal);color:#06352e;font-weight:900;font-size:21px}
+.contam-status strong{font-size:14px;color:var(--teal)}.contam-status p{font-size:11px;color:var(--muted);margin:5px 0 0}
+.section-title{font-size:17px;margin:0 0 16px}.chart-card{margin-bottom:18px}
+.chart-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.chart-legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.chart-wrap{height:245px}
+.lower{display:grid;grid-template-columns:1.05fr 1fr 1fr;gap:16px;margin-bottom:18px}
+.reading-table{width:100%;border-collapse:collapse;font-size:12px}.reading-table th{text-align:left;color:var(--muted);font-weight:500;padding:10px 7px;border-bottom:1px solid var(--border)}
+.reading-table td{padding:12px 7px;border-bottom:1px solid var(--border);color:var(--text)}
+.tag{padding:5px 8px;border-radius:12px;background:color-mix(in srgb,var(--teal) 16%,var(--panel));color:var(--teal);font-size:10px;white-space:nowrap}
+.tag.warn{background:color-mix(in srgb,var(--amber) 18%,var(--panel));color:var(--amber)}
+.flow{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:23px 0}
+.flow-step{text-align:center;flex:1;font-size:11px;color:var(--muted)}.flow-icon{width:52px;height:52px;display:grid;place-items:center;margin:0 auto 9px;border-radius:14px;border:1px solid var(--border);background:var(--panel2);color:var(--blue);font-size:24px}
+.arrow{color:var(--blue);font-size:20px}.status-list{display:grid;gap:0}
+.status-row{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}.status-row:last-child{border:0}
+.status-ok{color:var(--teal)}.status-pending{color:var(--amber)}
+.controls{display:grid;gap:10px}
+button{cursor:pointer;border-radius:9px;padding:12px 13px;border:1px solid var(--blue);background:color-mix(in srgb,var(--blue) 75%,#07518b);color:#fff;font-weight:700;font-size:12px}
+button.secondary{background:transparent;border-color:var(--border);color:var(--text)}button:hover{filter:brightness(1.12)}
+.note{font-size:11px;color:var(--muted);line-height:1.55;margin-top:14px}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:8px 0 0}
+.page{display:none}.page.active{display:block}.page-intro{margin-bottom:18px}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.setting-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--border)}
+.setting-row:last-child{border-bottom:0}.setting-row p{margin:5px 0 0;font-size:12px;color:var(--muted)}
+select,input[type=number]{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px;max-width:160px}
+.toggle{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px}.toggle input{accent-color:var(--blue);width:17px;height:17px}
+.history-tools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.history-table-wrap{overflow-x:auto}
+.history-table{width:100%;border-collapse:collapse;font-size:13px}.history-table th,.history-table td{text-align:left;padding:12px;border-bottom:1px solid var(--border);white-space:nowrap}.history-table th{color:var(--muted);font-weight:500}
+.empty-state{padding:25px;color:var(--muted);text-align:center}
+.toast{position:fixed;right:22px;bottom:22px;background:var(--panel2);border:1px solid var(--border);padding:12px 16px;border-radius:10px;color:var(--text);box-shadow:0 8px 30px #0003;display:none;z-index:10}
+@media(max-width:1150px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.lower{grid-template-columns:1fr 1fr}.lower .card:last-child{grid-column:1/-1}}
+@media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{padding:14px}.brand{padding-bottom:14px}nav{grid-template-columns:repeat(3,1fr);margin-top:12px}nav button{padding:10px 6px;text-align:center;font-size:11px}nav button span{display:block;width:auto;font-size:16px;margin-bottom:3px}.sidebar-bottom{display:none}main{padding:18px}.metrics,.lower,.settings-grid{grid-template-columns:1fr}.lower .card:last-child{grid-column:auto}.topbar h1{font-size:24px}.chart-wrap{height:220px}}
+</style>
+</head>
+<body>
+<div class="app">
+ <aside class="sidebar">
+  <div class="brand"><div class="logo">💧</div><div><h2>AquaSense</h2><p>Smart Water Purification System</p></div></div>
+  <nav aria-label="Main navigation">
+   <button class="active" data-page="dashboard"><span>⌂</span>Dashboard</button>
+   <button data-page="history"><span>▥</span>History</button>
+   <button data-page="analytics"><span>⌁</span>Analytics</button>
+   <button data-page="settings"><span>⚙</span>Settings</button>
+  </nav>
+  <div class="sidebar-bottom"><strong><span class="online-dot"></span>System Online</strong><p>Prototype dashboard<br>Simulation data active</p></div>
+ </aside>
+ <main>
+  <section class="page active" id="page-dashboard">
+   <div class="topbar"><div><h1>Water Quality Dashboard</h1><p class="subtitle">Foreign contaminant monitoring and purification overview</p></div><div class="top-actions"><span class="pill"><span class="online-dot"></span>System Online</span><span class="pill sim" id="modePill">◉ Simulation Mode</span><span class="pill" id="clock">--:--:--</span></div></div>
+   <section class="metrics">
+    <article class="card"><div class="metric-top"><span>Particulate Sensor</span><span class="icon">〰</span></div><div class="metric-number" id="particleValue">0.18 <small>signal</small></div><span class="chip" id="particleChip">No particles flagged</span></article>
+    <article class="card"><div class="metric-top"><span>Metal Detector</span><span class="icon">⬡</span></div><div class="metric-number" id="metalValue">0 <small>detections</small></div><span class="chip" id="metalChip">No metal detected</span></article>
+    <article class="card"><div class="metric-top"><span>Ambient Temperature</span><span class="icon" style="color:var(--amber)">♨</span></div><div class="metric-number" id="temperatureValue">26.1 <small>°C</small></div><span class="chip">DHT22</span></article>
+    <article class="card contam-card"><div class="metric-top"><span>Contamination Status</span><span class="icon" style="color:var(--teal)">✓</span></div><div class="contam-status" id="contamPanel"><div class="check" id="contamIcon">✓</div><div><strong id="contamTitle">No Contamination Flagged</strong><p id="contamDetail">No demo sensor alert is active</p></div></div></article>
+   </section>
+   <section class="card chart-card"><div class="chart-head"><h2 class="section-title" style="margin:0">Sensor Signal History</h2><div class="chart-legend"><span><i class="legend-dot" style="background:var(--blue)"></i>Particle signal</span><span><i class="legend-dot" style="background:var(--teal)"></i>Metal detections</span><span><i class="legend-dot" style="background:var(--amber)"></i>Temperature °C</span></div></div><div class="chart-wrap"><canvas id="trendChart"></canvas></div></section>
+   <section class="lower">
+    <article class="card"><h2 class="section-title">Recent Readings</h2><div class="history-table-wrap"><table class="reading-table"><thead><tr><th>Time</th><th>Particle</th><th>Metal</th><th>Status</th></tr></thead><tbody id="readingRows"></tbody></table></div><button class="secondary" style="margin-top:12px" onclick="navigate('history')">View Full History →</button></article>
+    <article class="card"><h2 class="section-title">Purification System</h2><div class="flow"><div class="flow-step"><div class="flow-icon">💧</div>Raw Water</div><div class="arrow">→</div><div class="flow-step"><div class="flow-icon">▤</div>Filter Stage</div><div class="arrow">→</div><div class="flow-step"><div class="flow-icon">✓</div>Recheck</div></div><h3 style="font-size:13px;margin:18px 0 4px">Prototype Components</h3><div class="status-list"><div class="status-row"><b>ESP32 controller</b><span class="status-ok">● Demo mode</span></div><div class="status-row"><b>Particle sensor</b><span class="status-pending">● Not connected</span></div><div class="status-row"><b>Metal detector</b><span class="status-pending">● Not connected</span></div><div class="status-row"><b>Filter / pump</b><span class="status-pending">● Not connected</span></div></div></article>
+    <article class="card"><h2 class="section-title">Quick Controls</h2><div class="controls"><button onclick="generateDemo()">▶ Generate Demo Reading</button><button class="secondary" onclick="resetDemo()">↻ Reset Demo Data</button><button class="secondary" onclick="downloadCSV()">⇩ Export Readings (CSV)</button></div><p class="note"><b>Prototype note:</b> Readings are simulated until actual sensor models are connected. Particle signal is a placeholder, not a calibrated unit. This dashboard does not certify drinking-water safety.</p></article>
+   </section>
+   <footer>AquaSense · Student prototype · Sensor integration pending</footer>
+  </section>
+
+  <section class="page" id="page-history">
+   <div class="topbar"><div><h1>Reading History</h1><p class="subtitle">Browse and export readings generated during this session</p></div><span class="pill sim">Session data</span></div>
+   <article class="card"><div class="history-tools"><input id="historySearch" type="search" placeholder="Search status or metal…" aria-label="Search history"><select id="historyFilter" aria-label="Filter history"><option value="all">All readings</option><option value="alert">Alerts only</option><option value="clear">Clear only</option></select><button onclick="downloadCSV()">Export CSV</button></div><div class="history-table-wrap"><table class="history-table"><thead><tr><th>Time</th><th>Particle signal</th><th>Metal detected</th><th>Temperature</th><th>Result</th></tr></thead><tbody id="fullHistoryRows"></tbody></table><div id="historyEmpty" class="empty-state" hidden>No readings match this filter yet.</div></div></article>
+  </section>
+
+  <section class="page" id="page-analytics">
+   <div class="topbar"><div><h1>Analytics</h1><p class="subtitle">Trends and alert counts from the current session</p></div><span class="pill sim">Demo analytics</span></div>
+   <section class="metrics">
+    <article class="card"><div class="metric-top">Samples recorded<span class="icon">▤</span></div><div class="metric-number" id="sampleCount">5</div><span class="chip">This session</span></article>
+    <article class="card"><div class="metric-top">Contamination alerts<span class="icon">!</span></div><div class="metric-number" id="alertCount">2</div><span class="chip warn">Simulated alerts</span></article>
+    <article class="card"><div class="metric-top">Metal detections<span class="icon">⬡</span></div><div class="metric-number" id="metalCount">1</div><span class="chip">This session</span></article>
+    <article class="card"><div class="metric-top">Latest temperature<span class="icon">♨</span></div><div class="metric-number" id="analyticsTemp">26.1 <small>°C</small></div><span class="chip">DHT22 demo</span></article>
+   </section>
+   <article class="card"><h2 class="section-title">Reading Trend</h2><div class="chart-wrap"><canvas id="analyticsChart"></canvas></div></article>
+   <p class="note">These summaries describe the simulated readings in this browser session. They are not real-world contamination statistics.</p>
+  </section>
+
+  <section class="page" id="page-settings">
+   <div class="topbar"><div><h1>Settings</h1><p class="subtitle">Personalise your dashboard and demo alert behaviour</p></div><span class="pill">Preferences</span></div>
+   <div class="settings-grid">
+    <article class="card"><h2 class="section-title">Appearance</h2>
+     <div class="setting-row"><div><b>Colour theme</b><p>Switch between dark and light mode</p></div><select id="themeSelect"><option value="dark">Dark mode</option><option value="light">Light mode</option></select></div>
+     <div class="setting-row"><div><b>Compact layout</b><p>Reduce spacing between dashboard cards</p></div><label class="toggle"><input type="checkbox" id="compactToggle"> Enabled</label></div>
+     <div class="setting-row"><div><b>Chart animations</b><p>Animate chart updates</p></div><label class="toggle"><input type="checkbox" id="animationToggle" checked> Enabled</label></div>
+    </article>
+    <article class="card"><h2 class="section-title">Demo alert threshold</h2>
+     <div class="setting-row"><div><b>Particle signal threshold</b><p>Demo values at or above this trigger an alert</p></div><input type="number" id="thresholdInput" min="0" max="1" step="0.05" value="0.60"></div>
+     <div class="setting-row"><div><b>Show temperature card</b><p>Display DHT22 ambient temperature</p></div><label class="toggle"><input type="checkbox" id="temperatureToggle" checked> Visible</label></div>
+     <p class="note">The threshold applies only to simulated placeholder values until the real sensor and its units are configured.</p>
+     <button onclick="saveSettings()">Save Settings</button>
+    </article>
+   </div>
+  </section>
+ </main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const $=id=>document.getElementById(id);
+let particleThreshold=0.60;
+let rows=[
+ {time:'19:42:16',particle:0.18,metal:false,temp:26.1},
+ {time:'19:41:16',particle:0.21,metal:false,temp:26.0},
+ {time:'19:40:16',particle:0.24,metal:false,temp:25.9},
+ {time:'19:39:16',particle:0.68,metal:true,temp:26.2},
+ {time:'19:38:16',particle:0.73,metal:false,temp:26.3}
+];
+let state={particle:0.18,metal:false,temperature:26.1};
+let labels=['19:38','19:39','19:40','19:41','19:42'];
+let particleHistory=[0.73,0.68,0.24,0.21,0.18],metalHistory=[0,1,0,0,0],tempHistory=[26.3,26.2,25.9,26.0,26.1];
+let chart,analyticsChart,toastTimer;
+function now(){return new Date().toLocaleTimeString([], {hour12:false});}
+function alertFor(r){return r.particle>=particleThreshold||r.metal;}
+function notify(msg){const el=$('toast');el.textContent=msg;el.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.style.display='none',2400);}
+function navigate(name){
+ document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id==='page-'+name));
+ document.querySelectorAll('nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===name));
+ if(name==='history')renderFullHistory();
+ if(name==='analytics')renderAnalytics();
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('nav button[data-page]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
+function isAlert(v,m){return v>=particleThreshold||m;}
+function evaluate(){
+ const pa=state.particle>=particleThreshold,ma=state.metal,alert=pa||ma;
+ $('particleValue').innerHTML=state.particle.toFixed(2)+' <small>signal</small>';
+ $('metalValue').innerHTML=(ma?1:0)+' <small>detections</small>';
+ $('temperatureValue').innerHTML=state.temperature.toFixed(1)+' <small>°C</small>';
+ $('particleChip').textContent=pa?'Particle signal elevated':'No particles flagged';$('particleChip').className='chip'+(pa?' warn':'');
+ $('metalChip').textContent=ma?'Metal detected':'No metal detected';$('metalChip').className='chip'+(ma?' danger':'');
+ $('contamPanel').style.background=alert?'color-mix(in srgb,var(--red) 14%,var(--panel))':'color-mix(in srgb,var(--teal) 12%,var(--panel))';
+ $('contamPanel').style.borderColor=alert?'var(--red)':'var(--teal)';
+ $('contamIcon').textContent=alert?'!':'✓';$('contamIcon').style.background=alert?'var(--red)':'var(--teal)';
+ $('contamTitle').textContent=alert?'Potential Contamination Detected':'No Contamination Flagged';$('contamTitle').style.color=alert?'var(--red)':'var(--teal)';
+ $('contamDetail').textContent=ma&&pa?'Particle signal elevated; metal signal active':ma?'Metal detector signal active':pa?'Particle signal above demo threshold':'No demo sensor alert is active';
+ $('sampleCount').textContent=rows.length;$('alertCount').textContent=rows.filter(r=>alertFor(r)).length;$('metalCount').textContent=rows.filter(r=>r.metal).length;$('analyticsTemp').innerHTML=state.temperature.toFixed(1)+' <small>°C</small>';
+}
+function renderRows(){
+ $('readingRows').innerHTML=rows.slice(0,5).map(r=>`<tr><td>${r.time}</td><td>${r.particle.toFixed(2)}</td><td>${r.metal?'Yes':'No'}</td><td><span class="tag ${alertFor(r)?'warn':''}">${alertFor(r)?'Check':'Clear'}</span></td></tr>`).join('');
+ renderFullHistory();evaluate();
+}
+function renderFullHistory(){
+ const query=($('historySearch')?.value||'').toLowerCase(),filter=$('historyFilter')?.value||'all';
+ const filtered=rows.filter(r=>{
+  const a=alertFor(r);
+  const matchesFilter=filter==='all'||(filter==='alert'&&a)||(filter==='clear'&&!a);
+  const matchesText=[r.time,r.metal?'metal yes':'metal no',a?'alert':'clear'].join(' ').toLowerCase().includes(query);
+  return matchesFilter&&matchesText;
+ });
+ $('fullHistoryRows').innerHTML=filtered.map(r=>`<tr><td>${r.time}</td><td>${r.particle.toFixed(2)}</td><td>${r.metal?'Yes':'No'}</td><td>${r.temp.toFixed(1)} °C</td><td><span class="tag ${alertFor(r)?'warn':''}">${alertFor(r)?'Potential alert':'No alert'}</span></td></tr>`).join('');
+ $('historyEmpty').hidden=filtered.length>0;
+}
+function chartOptions(){return {maintainAspectRatio:false,responsive:true,animation:$('animationToggle')?.checked!==false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false}},scales:{x:{grid:{color:'var(--border)'},ticks:{color:getComputedStyle(document.body).getPropertyValue('--muted').trim()||'#a9bfd7',maxTicksLimit:8}},y:{beginAtZero:true,suggestedMax:1,grid:{color:'#274055'},ticks:{color:getComputedStyle(document.body).getPropertyValue('--muted').trim()||'#a9bfd7'}},y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#d99b2b'},min:15,max:40}}};}
+function makeChart(canvasId){
+ return new Chart($(canvasId).getContext('2d'),{type:'line',data:{labels:[...labels],datasets:[
+ {label:'Particle signal',data:[...particleHistory],borderColor:'#35b7ff',backgroundColor:'#35b7ff20',fill:true,tension:.3,yAxisID:'y',pointRadius:3},
+ {label:'Metal detections',data:[...metalHistory],borderColor:'#27dfb0',backgroundColor:'#27dfb015',fill:false,tension:0,yAxisID:'y',stepped:true,pointRadius:3},
+ {label:'Temperature °C',data:[...tempHistory],borderColor:'#ffbd4a',backgroundColor:'#ffbd4a18',fill:false,tension:.3,yAxisID:'y1',pointRadius:2}
+ ]},options:chartOptions()});
+}
+function updateCharts(){
+ const t=now().slice(0,5);labels.push(t);particleHistory.push(state.particle);metalHistory.push(state.metal?1:0);tempHistory.push(state.temperature);
+ labels=labels.slice(-12);particleHistory=particleHistory.slice(-12);metalHistory=metalHistory.slice(-12);tempHistory=tempHistory.slice(-12);
+ [chart,analyticsChart].filter(Boolean).forEach(c=>{c.data.labels=[...labels];c.data.datasets[0].data=[...particleHistory];c.data.datasets[1].data=[...metalHistory];c.data.datasets[2].data=[...tempHistory];c.options.animation=$('animationToggle').checked;c.update();});
+}
+function generateDemo(){
+ state.particle=Number((Math.random()*0.9).toFixed(2));state.metal=Math.random()<0.22;state.temperature=Number((23+Math.random()*7).toFixed(1));
+ rows.unshift({time:now(),particle:state.particle,metal:state.metal,temp:state.temperature});rows=rows.slice(0,200);
+ updateCharts();renderRows();notify(alertFor(state)?'Demo alert generated':'Demo reading added');
+}
+function resetDemo(){
+ state={particle:0.18,metal:false,temperature:26.1};
+ rows=[{time:now(),particle:.18,metal:false,temp:26.1},{time:'19:41:16',particle:.21,metal:false,temp:26.0},{time:'19:40:16',particle:.24,metal:false,temp:25.9},{time:'19:39:16',particle:.68,metal:true,temp:26.2},{time:'19:38:16',particle:.73,metal:false,temp:26.3}];
+ labels=['19:38','19:39','19:40','19:41','19:42'];particleHistory=[.73,.68,.24,.21,.18];metalHistory=[0,1,0,0,0];tempHistory=[26.3,26.2,25.9,26.0,26.1];
+ [chart,analyticsChart].filter(Boolean).forEach(c=>{c.data.labels=[...labels];c.data.datasets[0].data=[...particleHistory];c.data.datasets[1].data=[...metalHistory];c.data.datasets[2].data=[...tempHistory];c.update();});
+ renderRows();notify('Demo data reset');
+}
+function downloadCSV(){
+ const header=['Time','Particle Signal','Metal Detected','Temperature C','Status'];
+ const data=rows.map(r=>[r.time,r.particle,r.metal?'Yes':'No',r.temp,alertFor(r)?'Potential alert':'No alert']);
+ const csv=[header,...data].map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n');
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='aquasense-readings.csv';a.click();URL.revokeObjectURL(url);notify('CSV export started');
+}
+function saveSettings(){
+ const threshold=Number($('thresholdInput').value);
+ if(!Number.isFinite(threshold)||threshold<0||threshold>1){notify('Threshold must be between 0 and 1');return;}
+ particleThreshold=threshold;document.body.classList.toggle('light',$('themeSelect').value==='light');
+ document.body.classList.toggle('compact',$('compactToggle').checked);
+ document.querySelectorAll('.temperature-setting-hidden').forEach(el=>el.remove());
+ document.querySelectorAll('.metric-top').forEach(el=>{if(el.parentElement.querySelector('#temperatureValue'))el.parentElement.style.display=$('temperatureToggle').checked?'':'none';});
+ if(chart)chart.options.animation=$('animationToggle').checked;if(analyticsChart)analyticsChart.options.animation=$('animationToggle').checked;
+ evaluate();renderRows();if(chart)chart.update();if(analyticsChart)analyticsChart.update();
+ notify('Settings saved');
+}
+$('themeSelect').addEventListener('change',()=>{document.body.classList.toggle('light',$('themeSelect').value==='light');if(chart){chart.options.scales.x.ticks.color=getComputedStyle(document.body).getPropertyValue('--muted').trim();chart.update();}if(analyticsChart){analyticsChart.options.scales.x.ticks.color=getComputedStyle(document.body).getPropertyValue('--muted').trim();analyticsChart.update();}});
+$('compactToggle').addEventListener('change',e=>document.body.classList.toggle('compact',e.target.checked));
+$('historySearch').addEventListener('input',renderFullHistory);$('historyFilter').addEventListener('change',renderFullHistory);
+$('clock').textContent=now();setInterval(()=>$('clock').textContent=now(),1000);
+chart=makeChart('trendChart');renderRows();
+document.querySelectorAll('.page').forEach(p=>p.addEventListener('transitionend',()=>{}));
+const originalNavigate=navigate;
+function renderAnalytics(){if(!analyticsChart){analyticsChart=makeChart('analyticsChart');}else{analyticsChart.data.labels=[...labels];analyticsChart.data.datasets[0].data=[...particleHistory];analyticsChart.data.datasets[1].data=[...metalHistory];analyticsChart.data.datasets[2].data=[...tempHistory];analyticsChart.update();}}
+</script>
+<style>
+body.compact main{padding:18px}body.compact .card{padding:13px}body.compact .metrics,body.compact .lower{gap:10px}body.compact .chart-card{margin-bottom:10px}
+</style>
+</body>
+</html>

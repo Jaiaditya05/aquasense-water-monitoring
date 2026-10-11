@@ -1,0 +1,199 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AquaSense | Adaptive Water Purification</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f3f6fa;color:#18283b}
+header{background:#102d46;color:white;padding:24px 5%;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0 0 7px;font-size:26px}
+header p{margin:0;color:#c5d8e8;font-size:13px}
+.tag{background:#244c65;padding:9px 13px;border-radius:22px;font-size:12px}
+main{max-width:1200px;margin:28px auto;padding:0 20px}
+h2{font-size:18px;margin:26px 0 14px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.card{background:white;border:1px solid #e1e8ef;border-radius:14px;padding:19px;box-shadow:0 4px 15px #152b3c08}
+.muted{color:#718096;font-size:13px}
+.value{font-size:30px;font-weight:bold;margin:12px 0}
+.status{padding:9px;border-radius:8px;background:#edf2f7;font-size:12px;font-weight:bold}
+.warn{background:#fff1d6;color:#915600}
+.good{background:#e3f7eb;color:#146c43}
+.panel{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+.line{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #e7edf3;font-size:14px}
+.line:last-child{border:0}
+button{border:0;border-radius:8px;padding:12px 15px;background:#1769aa;color:white;font-weight:bold;cursor:pointer}
+button.secondary{background:#e9f0f7;color:#184668}
+button:focus{outline:2px solid #1769aa;outline-offset:2px}
+.buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+canvas{width:100%;max-height:230px}
+footer{text-align:center;color:#718096;font-size:12px;padding:28px}
+@media(max-width:720px){.grid,.panel{grid-template-columns:1fr}header h1{font-size:22px}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>AquaSense</h1>
+    <p>Adaptive Water Purification &amp; Quality Verification</p>
+  </div>
+  <span class="tag" id="mode">SIMULATION MODE</span>
+</header>
+
+<main>
+  <h2>Water quality overview</h2>
+  <div class="grid">
+    <section class="card">
+      <div class="muted">Turbidity</div>
+      <div class="value"><span id="turbidity">18.4</span> <small>NTU</small></div>
+      <div class="muted">Suspended particles / cloudiness</div>
+      <p class="status warn" id="turbidityStatus">Above demo threshold</p>
+    </section>
+    <section class="card">
+      <div class="muted">Total dissolved solids</div>
+      <div class="value"><span id="tds">620</span> <small>ppm</small></div>
+      <div class="muted">Estimated dissolved-solids concentration</div>
+      <p class="status warn" id="tdsStatus">Above demo threshold</p>
+    </section>
+    <section class="card">
+      <div class="muted">Temperature</div>
+      <div class="value"><span id="temperature">27.0</span> <small>°C</small></div>
+      <div class="muted">Ambient temperature from the DHT22</div>
+      <p class="status">Context reading</p>
+    </section>
+  </div>
+
+  <h2>Reading trends</h2>
+  <div class="grid">
+    <section class="card">
+      <h3>Turbidity trend</h3>
+      <p class="muted">NTU · recent samples</p>
+      <canvas id="turbidityChart"></canvas>
+    </section>
+    <section class="card">
+      <h3>TDS trend</h3>
+      <p class="muted">ppm · recent samples</p>
+      <canvas id="tdsChart"></canvas>
+    </section>
+    <section class="card">
+      <h3>Temperature trend</h3>
+      <p class="muted">°C · recent samples</p>
+      <canvas id="temperatureChart"></canvas>
+    </section>
+  </div>
+
+  <h2>Adaptive treatment controller</h2>
+  <div class="panel">
+    <section class="card">
+      <div class="muted">System recommendation</div>
+      <h2 id="decision">Treatment recommended</h2>
+      <p id="decisionDetail" class="muted">Demo readings exceed at least one configured threshold.</p>
+      <div class="line"><span>Operating mode</span><strong>Simulation</strong></div>
+      <div class="line"><span>Pump</span><strong>Not connected</strong></div>
+      <div class="line"><span>Last update</span><strong id="updated">--</strong></div>
+      <div class="buttons">
+        <button onclick="generateSample()">Generate demo readings</button>
+        <button class="secondary" onclick="resetDemo()">Reset demo</button>
+      </div>
+    </section>
+    <section class="card">
+      <h3>Treatment process</h3>
+      <div class="line"><span>1. Measure incoming water</span><strong>Demo</strong></div>
+      <div class="line"><span>2. Sediment filtration</span><strong>Planned</strong></div>
+      <div class="line"><span>3. Measure output water</span><strong>Pending</strong></div>
+      <div class="line"><span>4. Verify improvement</span><strong>Pending</strong></div>
+      <p class="muted">The physical pump and filters are not controlled by this version.</p>
+    </section>
+  </div>
+
+  <h2>About these readings</h2>
+  <section class="card muted">
+    Initial values and generated readings are simulated, not measurements from your sensors.
+    The thresholds are provisional demonstration settings. Turbidity and TDS cannot
+    independently establish drinking-water safety. The DHT22 measures ambient temperature,
+    not water temperature. Sensor calibration and suitable water-quality testing are required
+    for meaningful real-world results.
+  </section>
+</main>
+<footer>AquaSense · Student prototype · Dashboard v1</footer>
+
+<script>
+const initial={turbidity:18.4,tds:620,temperature:27.0};
+const history={turbidity:[18.4,15.2,16.8,12.5,14.1,18.4],
+tds:[620,590,640,610,600,620],
+temperature:[26.2,26.4,26.7,26.8,27.1,27.0]};
+const labels=['1','2','3','4','5','6'];
+const charts={};
+
+function makeChart(id,key,color){
+  charts[key]=new Chart(document.getElementById(id),{
+    type:'line',
+    data:{labels:[...labels],datasets:[{
+      label:key,data:[...history[key]],borderColor:color,
+      backgroundColor:color+'22',fill:true,tension:.3,
+      pointRadius:3
+    }]},
+    options:{responsive:true,animation:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'Sample'}},
+              y:{beginAtZero:false}}
+    }
+  });
+}
+makeChart('turbidityChart','turbidity','#1677b8');
+makeChart('tdsChart','tds','#15956b');
+makeChart('temperatureChart','temperature','#d58b20');
+
+function evaluate(){
+  const turbidity=Number(document.getElementById('turbidity').textContent);
+  const tds=Number(document.getElementById('tds').textContent);
+  const highT=turbidity>5, highD=tds>500;
+  const ts=document.getElementById('turbidityStatus');
+  ts.textContent=highT?'Above demo threshold':'Within demo threshold';
+  ts.className='status '+(highT?'warn':'good');
+  const ds=document.getElementById('tdsStatus');
+  ds.textContent=highD?'Above demo threshold':'Within demo threshold';
+  ds.className='status '+(highD?'warn':'good');
+  document.getElementById('decision').textContent=
+    highT||highD?'Treatment recommended':'No demo threshold exceeded';
+  document.getElementById('decisionDetail').textContent=
+    'This is a preliminary rule-based recommendation, not a drinking-water safety verdict.';
+  document.getElementById('updated').textContent=new Date().toLocaleTimeString();
+}
+
+function setReading(key,value){
+  document.getElementById(key).textContent=
+    key==='temperature'?value.toFixed(1):key==='turbidity'?value.toFixed(1):Math.round(value);
+  history[key].push(Number(value.toFixed(key==='temperature'||key==='turbidity'?1:0)));
+  if(history[key].length>12){history[key].shift();labels.shift();}
+  const chart=charts[key];
+  chart.data.labels=history[key].map((_,i)=>String(i+1));
+  chart.data.datasets[0].data=[...history[key]];
+  chart.update();
+}
+function generateSample(){
+  setReading('turbidity',1+Math.random()*25);
+  setReading('tds',150+Math.random()*650);
+  setReading('temperature',22+Math.random()*12);
+  evaluate();
+}
+function resetDemo(){
+  Object.assign(history,{turbidity:[18.4,15.2,16.8,12.5,14.1,18.4],
+  tds:[620,590,640,610,600,620],
+  temperature:[26.2,26.4,26.7,26.8,27.1,27.0]});
+  for(const key of Object.keys(history)){
+    document.getElementById(key).textContent=initial[key].toFixed(key==='tds'?0:1);
+    charts[key].data.labels=history[key].map((_,i)=>String(i+1));
+    charts[key].data.datasets[0].data=[...history[key]];
+    charts[key].update();
+  }
+  evaluate();
+}
+evaluate();
+</script>
+</body>
+</html>
+
