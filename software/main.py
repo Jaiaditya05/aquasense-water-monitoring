@@ -4,9 +4,9 @@
 
 from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
-from software.sensors import WaterQualitySensor
-from software.purification import PurificationSystem, ActionRecommender
-from software.data_processing import WaterQualityAnalyzer, DataStorage
+from sensors import WaterQualitySensor
+from purification import PurificationSystem, ActionRecommender
+from data_processing import WaterQualityAnalyzer, DataStorage
 from config import SIMULATION_MODE, SERVER_HOST, SERVER_PORT, DEBUG_MODE
 import time
 
