@@ -1,7 +1,6 @@
 # Data Processing Module
 # Handles quality scoring, analysis, and reporting
 
-import sqlite3
 import os
 from datetime import datetime, timedelta
 from config import (
@@ -130,239 +129,142 @@ class WaterQualityAnalyzer:
             return 'CRITICAL - Water is unsafe - Stop usage immediately'
 
 
+
 class DataStorage:
-    """Handle local database storage and retrieval"""
-    
-    def __init__(self, db_path=LOCAL_DB_PATH):
-        self.db_path = db_path
+    """PostgreSQL-backed storage for AquaSense water-quality data."""
+
+    def __init__(self, db_path=None):
+        import os
+        import psycopg
+
+        self.database_url = os.environ.get("DATABASE_URL")
+
+        if not self.database_url:
+            raise RuntimeError(
+                "DATABASE_URL is missing. Add your PostgreSQL connection "
+                "string to the environment variables."
+            )
+
+        self.psycopg = psycopg
         self._init_database()
-    
+
     def _init_database(self):
-        """Initialize SQLite database with required tables"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Create readings table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS readings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    ph REAL,
-                    turbidity REAL,
-                    tds REAL,
-                    temperature REAL,
-                    flow_rate REAL,
-                    quality_score REAL,
-                    status TEXT
-                )
-            ''')
-            
-            # Create alerts table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS alerts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    alert_type TEXT,
-                    severity TEXT,
-                    message TEXT,
-                    read INTEGER DEFAULT 0
-                )
-            ''')
-            
-            # Create maintenance log table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS maintenance_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    maintenance_type TEXT,
-                    description TEXT,
-                    duration_seconds INTEGER
-                )
-            ''')
-            
-            conn.commit()
-            conn.close()
-            print("[INFO] Database initialized successfully")
-        
-        except Exception as e:
-            print(f"[ERROR] Database initialization failed: {e}")
-    
+        with self.psycopg.connect(self.database_url) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS readings (
+                        id BIGSERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        ph DOUBLE PRECISION,
+                        turbidity DOUBLE PRECISION,
+                        tds DOUBLE PRECISION,
+                        temperature DOUBLE PRECISION,
+                        flow_rate DOUBLE PRECISION,
+                        quality_score DOUBLE PRECISION,
+                        status TEXT
+                    )
+                """)
+
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS alerts (
+                        id BIGSERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        alert_type TEXT,
+                        severity TEXT,
+                        message TEXT,
+                        read INTEGER DEFAULT 0
+                    )
+                """)
+
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS maintenance_log (
+                        id BIGSERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        maintenance_type TEXT,
+                        description TEXT,
+                        duration_seconds INTEGER
+                    )
+                """)
+
     def save_reading(self, reading, quality_score, status):
-        """Save sensor reading to database"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO readings 
-                (ph, turbidity, tds, temperature, flow_rate, quality_score, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                reading.ph, reading.turbidity, reading.tds,
-                reading.temperature, reading.flow_rate,
-                quality_score, status
-            ))
-            
-            conn.commit()
-            conn.close()
-            return True
-        
-        except Exception as e:
-            print(f"[ERROR] Failed to save reading: {e}")
-            return False
-    
+        with self.psycopg.connect(self.database_url) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO readings (
+                        ph, turbidity, tds, temperature,
+                        flow_rate, quality_score, status
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    reading.ph,
+                    reading.turbidity,
+                    reading.tds,
+                    reading.temperature,
+                    reading.flow_rate,
+                    quality_score,
+                    status
+                ))
+
     def get_latest_readings(self, limit=100):
-        """Retrieve latest readings from database"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT * FROM readings
-                ORDER BY timestamp DESC
-                LIMIT ?
-            ''', (limit,))
-            
-            rows = cursor.fetchall()
-            conn.close()
-            
-            return rows
-        
-        except Exception as e:
-            print(f"[ERROR] Failed to retrieve readings: {e}")
-            return []
-    
+        with self.psycopg.connect(self.database_url) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM readings
+                    ORDER BY timestamp DESC
+                    LIMIT %s
+                """, (limit,))
+                return cursor.fetchall()
+
     def get_readings_since(self, hours=24):
-        """Get readings from the last N hours"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            time_threshold = datetime.now() - timedelta(hours=hours)
-            
-            cursor.execute('''
-                SELECT * FROM readings
-                WHERE timestamp > ?
-                ORDER BY timestamp DESC
-            ''', (time_threshold,))
-            
-            rows = cursor.fetchall()
-            conn.close()
-            
-            return rows
-        
-        except Exception as e:
-            print(f"[ERROR] Failed to retrieve readings: {e}")
-            return []
-    
+        from datetime import datetime, timedelta
+
+        cutoff = datetime.now() - timedelta(hours=hours)
+
+        with self.psycopg.connect(self.database_url) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM readings
+                    WHERE timestamp >= %s
+                    ORDER BY timestamp DESC
+                """, (cutoff,))
+                return cursor.fetchall()
+
     def save_alert(self, alert_type, severity, message):
-        """Save alert to database"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO alerts (alert_type, severity, message)
-                VALUES (?, ?, ?)
-            ''', (alert_type, severity, message))
-            
-            conn.commit()
-            conn.close()
-            return True
-        
-        except Exception as e:
-            print(f"[ERROR] Failed to save alert: {e}")
-            return False
-    
-    def log_maintenance(self, maintenance_type, description, duration=0):
-        """Log maintenance activity"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO maintenance_log (maintenance_type, description, duration_seconds)
-                VALUES (?, ?, ?)
-            ''', (maintenance_type, description, duration))
-            
-            conn.commit()
-            conn.close()
-            return True
-        
-        except Exception as e:
-            print(f"[ERROR] Failed to log maintenance: {e}")
-            return False
-    
+        with self.psycopg.connect(self.database_url) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO alerts (alert_type, severity, message)
+                    VALUES (%s, %s, %s)
+                """, (alert_type, severity, message))
+
+    def log_maintenance(
+        self, maintenance_type, description, duration=0
+    ):
+        with self.psycopg.connect(self.database_url) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO maintenance_log (
+                        maintenance_type, description, duration_seconds
+                    )
+                    VALUES (%s, %s, %s)
+                """, (maintenance_type, description, duration))
+
     def get_statistics(self, hours=24):
-        """Get statistics for the last N hours"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            time_threshold = datetime.now() - timedelta(hours=hours)
-            
-            cursor.execute('''
-                SELECT 
-                    AVG(ph) as avg_ph,
-                    MIN(ph) as min_ph,
-                    MAX(ph) as max_ph,
-                    AVG(turbidity) as avg_turbidity,
-                    AVG(tds) as avg_tds,
-                    AVG(temperature) as avg_temp,
-                    AVG(quality_score) as avg_quality,
-                    COUNT(*) as reading_count
-                FROM readings
-                WHERE timestamp > ?
-            ''', (time_threshold,))
-            
-            result = cursor.fetchone()
-            conn.close()
-            
-            if result:
-                return {
-                    'avg_ph': round(result[0], 2) if result[0] else 0,
-                    'min_ph': round(result[1], 2) if result[1] else 0,
-                    'max_ph': round(result[2], 2) if result[2] else 0,
-                    'avg_turbidity': round(result[3], 2) if result[3] else 0,
-                    'avg_tds': round(result[4], 2) if result[4] else 0,
-                    'avg_temp': round(result[5], 2) if result[5] else 0,
-                    'avg_quality': round(result[6], 2) if result[6] else 0,
-                    'reading_count': result[7]
-                }
-            
-            return None
-        
-        except Exception as e:
-            print(f"[ERROR] Failed to get statistics: {e}")
-            return None
+        readings = self.get_readings_since(hours)
 
+        if not readings:
+            return {
+                "count": 0,
+                "avg_ph": 0,
+                "avg_turbidity": 0,
+                "avg_tds": 0,
+                "avg_temperature": 0
+            }
 
-if __name__ == "__main__":
-    # Test data processing
-    print("=" * 60)
-    print("Data Processing Test")
-    print("=" * 60)
-    
-    # Create a mock reading
-    class MockReading:
-        def __init__(self):
-            self.ph = 7.2
-            self.turbidity = 2.5
-            self.tds = 300
-            self.temperature = 25
-            self.flow_rate = 3.5
-    
-    reading = MockReading()
-    score = WaterQualityAnalyzer.calculate_quality_score(reading)
-    status = WaterQualityAnalyzer.get_status(score)
-    alert = WaterQualityAnalyzer.get_alert_message(score)
-    
-    print(f"\nQuality Score: {score}/100")
-    print(f"Status: {status}")
-    print(f"Alert: {alert}")
-    
-    # Test database
-    storage = DataStorage()
-    storage.save_reading(reading, score, status)
-    print("\n[INFO] Reading saved to database")
+        return {
+            "count": len(readings),
+            "avg_ph": sum(r[2] or 0 for r in readings) / len(readings),
+            "avg_turbidity": sum(r[3] or 0 for r in readings) / len(readings),
+            "avg_tds": sum(r[4] or 0 for r in readings) / len(readings),
+            "avg_temperature": sum(r[5] or 0 for r in readings) / len(readings)
+        }

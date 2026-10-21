@@ -65,7 +65,12 @@ CHLORINATION_DOSE_PPM = 0.5  # mg/L
 # ============================================================================
 
 # Local Database
-LOCAL_DB_PATH = "data/water_quality.db"
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(BASE_DIR)
+LOCAL_DB_PATH = os.path.join(PROJECT_DIR, "data", "water_quality.db")
+
 DATA_LOG_INTERVAL = 10  # seconds (log data every 10 seconds)
 MAX_LOCAL_RECORDS = 100000  # Maximum records before cleanup
 
