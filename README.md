@@ -5,7 +5,7 @@
 A comprehensive solution for **water purification and real-time quality monitoring** designed specifically for **rural and mining-affected areas**. This system combines IoT sensors, automated purification controls, and cloud-based monitoring to provide clean, safe drinking water to remote communities.
 
 ### **Key Features:**
-- 🔍 **Real-time Water Quality Monitoring** — pH, turbidity, temperature, TDS (Total Dissolved Solids)
+- 🔍 **Real-time Water Quality Monitoring** — turbidity, temperature, TDS (Total Dissolved Solids)
 - 💧 **Automated Purification Control** — Smart filtering and treatment activation
 - 📊 **Data Analytics Dashboard** — Visualize water quality trends
 - 🚨 **Alert System** — Notifications when water quality is compromised

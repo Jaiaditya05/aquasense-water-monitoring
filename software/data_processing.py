@@ -4,60 +4,48 @@
 import os
 from datetime import datetime, timedelta
 from config import (
-    PH_WEIGHT, TURBIDITY_WEIGHT, TDS_WEIGHT, TEMP_WEIGHT, FLOW_WEIGHT,
-    QUALITY_SCORE_GOOD, QUALITY_SCORE_FAIR, QUALITY_SCORE_POOR,
-    LOCAL_DB_PATH, PH_ALERT_MIN, PH_ALERT_MAX, TURBIDITY_ALERT_THRESHOLD,
-    TDS_ALERT_THRESHOLD, TEMP_ALERT_MIN, TEMP_ALERT_MAX
+    TURBIDITY_WEIGHT,
+    TDS_WEIGHT,
+    TEMP_WEIGHT,
+    QUALITY_SCORE_GOOD,
+    QUALITY_SCORE_FAIR,
+    QUALITY_SCORE_POOR,
 )
 
 
 class WaterQualityAnalyzer:
-    """Analyze water quality readings and generate scores"""
-    
+    """Analyze supported AquaSense measurements: turbidity, TDS and temperature."""
+
     @staticmethod
     def calculate_quality_score(reading):
+        """Calculate an indicative score using available sensor readings only.
+
+        Missing measurements are excluded from the weighted average. This is a
+        prototype indicator, not a drinking-water safety certification.
         """
-        Calculate overall water quality score (0-100)
-        Based on weighted parameters
-        """
-        
-        # Calculate individual parameter scores (0-100)
-        ph_score = WaterQualityAnalyzer._score_ph(reading.ph)
-        turbidity_score = WaterQualityAnalyzer._score_turbidity(reading.turbidity)
-        tds_score = WaterQualityAnalyzer._score_tds(reading.tds)
-        temp_score = WaterQualityAnalyzer._score_temperature(reading.temperature)
-        flow_score = WaterQualityAnalyzer._score_flow(reading.flow_rate)
-        
-        # Calculate weighted average
-        total_weight = PH_WEIGHT + TURBIDITY_WEIGHT + TDS_WEIGHT + TEMP_WEIGHT + FLOW_WEIGHT
-        
-        quality_score = (
-            (ph_score * PH_WEIGHT +
-             turbidity_score * TURBIDITY_WEIGHT +
-             tds_score * TDS_WEIGHT +
-             temp_score * TEMP_WEIGHT +
-             flow_score * FLOW_WEIGHT) / total_weight
+        measurements = (
+            ("turbidity", TURBIDITY_WEIGHT, WaterQualityAnalyzer._score_turbidity),
+            ("tds", TDS_WEIGHT, WaterQualityAnalyzer._score_tds),
+            ("temperature", TEMP_WEIGHT, WaterQualityAnalyzer._score_temperature),
         )
-        
-        return round(quality_score, 2)
-    
-    @staticmethod
-    def _score_ph(ph):
-        """Score pH level (0-100)"""
-        # Ideal range: 6.5-8.5
-        if 6.5 <= ph <= 8.5:
-            return 100
-        elif ph < 6.5:
-            # Below ideal - deduct points linearly
-            return max(0, 100 - (6.5 - ph) * 10)
-        else:
-            # Above ideal - deduct points linearly
-            return max(0, 100 - (ph - 8.5) * 10)
-    
+
+        available_scores = []
+        for attribute, weight, scorer in measurements:
+            value = getattr(reading, attribute, None)
+            if value is None or weight <= 0:
+                continue
+            available_scores.append((scorer(float(value)), weight))
+
+        if not available_scores:
+            return None
+
+        total_weight = sum(weight for _, weight in available_scores)
+        weighted_score = sum(score * weight for score, weight in available_scores)
+        return round(weighted_score / total_weight, 2)
+
     @staticmethod
     def _score_turbidity(turbidity):
-        """Score turbidity level (0-100)"""
-        # Ideal: < 5 NTU
+        """Indicative turbidity score (0-100); assumes calibrated NTU input."""
         if turbidity <= 5:
             return 100
         elif turbidity <= 10:
@@ -66,67 +54,53 @@ class WaterQualityAnalyzer:
             return 50
         elif turbidity <= 50:
             return 30
-        else:
-            return max(0, 100 - turbidity * 2)
-    
+        return max(0, 100 - turbidity * 2)
+
     @staticmethod
     def _score_tds(tds):
-        """Score TDS level (0-100) - ppm"""
-        # Ideal: < 500 ppm
+        """Indicative TDS score (0-100), with TDS in ppm."""
         if tds <= 500:
             return 100
         elif tds <= 750:
             return 75
         elif tds <= 1000:
             return 50
-        else:
-            return max(0, 100 - (tds - 1000) * 0.05)
-    
+        return max(0, 100 - (tds - 1000) * 0.05)
+
     @staticmethod
     def _score_temperature(temp):
-        """Score temperature level (0-100)"""
-        # Ideal: 10-40°C
+        """Indicative temperature score (0-100), in degrees Celsius."""
         if 10 <= temp <= 40:
             return 100
         elif temp < 10:
             return max(0, 100 - (10 - temp) * 5)
-        else:
-            return max(0, 100 - (temp - 40) * 5)
-    
-    @staticmethod
-    def _score_flow(flow_rate):
-        """Score flow rate (0-100) - L/min"""
-        # Ideal: 0.5-10 L/min
-        if 0.5 <= flow_rate <= 10:
-            return 100
-        elif flow_rate < 0.5:
-            return max(0, 100 - (0.5 - flow_rate) * 50)
-        else:
-            return max(0, 100 - (flow_rate - 10) * 5)
-    
+        return max(0, 100 - (temp - 40) * 5)
+
     @staticmethod
     def get_status(quality_score):
-        """Get quality status based on score"""
+        """Return INCOMPLETE when no supported measurements are available."""
+        if quality_score is None:
+            return "INCOMPLETE"
         if quality_score >= QUALITY_SCORE_GOOD:
-            return 'Good'
+            return "Good"
         elif quality_score >= QUALITY_SCORE_FAIR:
-            return 'Fair'
+            return "Fair"
         elif quality_score >= QUALITY_SCORE_POOR:
-            return 'Poor'
-        else:
-            return 'Critical'
-    
+            return "Poor"
+        return "Critical"
+
     @staticmethod
     def get_alert_message(quality_score):
-        """Get alert message based on quality score"""
+        """Describe the prototype score without certifying water as safe."""
+        if quality_score is None:
+            return "Waiting for supported sensor measurements"
         if quality_score >= QUALITY_SCORE_GOOD:
-            return 'Water is safe for consumption'
+            return "Indicative sensor readings are within configured target ranges"
         elif quality_score >= QUALITY_SCORE_FAIR:
-            return 'Water quality is acceptable - Monitor closely'
+            return "Water-quality readings should be monitored"
         elif quality_score >= QUALITY_SCORE_POOR:
-            return 'Water quality is poor - Treatment recommended'
-        else:
-            return 'CRITICAL - Water is unsafe - Stop usage immediately'
+            return "Readings indicate that treatment may be required"
+        return "Critical sensor readings: investigate before use"
 
 
 
@@ -196,11 +170,11 @@ class DataStorage:
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
-                    reading.ph,
-                    reading.turbidity,
-                    reading.tds,
-                    reading.temperature,
-                    reading.flow_rate,
+                    getattr(reading, "ph", None),
+                    getattr(reading, "turbidity", None),
+                    getattr(reading, "tds", None),
+                    getattr(reading, "temperature", None),
+                    getattr(reading, "flow_rate", None),
                     quality_score,
                     status
                 ))
@@ -209,7 +183,9 @@ class DataStorage:
         with self.psycopg.connect(self.database_url) as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT * FROM readings
+                    SELECT id, timestamp, ph, turbidity, tds, temperature,
+                           flow_rate, quality_score, status
+                    FROM readings
                     ORDER BY timestamp DESC
                     LIMIT %s
                 """, (limit,))
@@ -223,7 +199,9 @@ class DataStorage:
         with self.psycopg.connect(self.database_url) as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT * FROM readings
+                    SELECT id, timestamp, ph, turbidity, tds, temperature,
+                           flow_rate, quality_score, status
+                    FROM readings
                     WHERE timestamp >= %s
                     ORDER BY timestamp DESC
                 """, (cutoff,))
@@ -250,21 +228,28 @@ class DataStorage:
                 """, (maintenance_type, description, duration))
 
     def get_statistics(self, hours=24):
+        """Return statistics for supported measurements only."""
         readings = self.get_readings_since(hours)
 
         if not readings:
             return {
                 "count": 0,
-                "avg_ph": 0,
-                "avg_turbidity": 0,
-                "avg_tds": 0,
-                "avg_temperature": 0
+                "avg_turbidity": None,
+                "avg_tds": None,
+                "avg_temperature": None,
             }
 
+        def average(column_index):
+            values = [row[column_index] for row in readings
+                      if row[column_index] is not None]
+            return sum(values) / len(values) if values else None
+
+        # Existing table order is:
+        # id, timestamp, ph, turbidity, tds, temperature, flow_rate,
+        # quality_score, status.
         return {
             "count": len(readings),
-            "avg_ph": sum(r[2] or 0 for r in readings) / len(readings),
-            "avg_turbidity": sum(r[3] or 0 for r in readings) / len(readings),
-            "avg_tds": sum(r[4] or 0 for r in readings) / len(readings),
-            "avg_temperature": sum(r[5] or 0 for r in readings) / len(readings)
+            "avg_turbidity": average(3),
+            "avg_tds": average(4),
+            "avg_temperature": average(5),
         }
